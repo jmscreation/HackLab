@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Game</title>
+		<meta charset="utf-8"/>
+		<script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+		<script src="scripts/encode.js" type="text/javascript"></script>
+		<script src="scripts/nimble.js" type="text/javascript"></script>
+		<script src="scripts/pixi.js" type="text/javascript"></script>
+		<script src="scripts/pixi-sound.js" type="text/javascript"></script>
+		<script src="../GMJS/gm.js" type="text/javascript"></script>
+	</head>
+	<body>
+		<script type="text/javascript">
+
+/*
+		HACKLAB Version 0.3.6
+		-- jmscreation --
+*/
+		
+oncontextmenu = function(){return false;};
+var Cont;
+var FindChipset, SaveLevel, LoadLevel, instance_sid, g, VisibilityObjects, Region;
+window.onload = function(){'use strict';
+	g = GMJS;
+	function getE(x){return document.getElementById(x);}
+	//Setup Fonts
+	WebFont.load({
+        google: {
+            families: ['Ubuntu', 'Coda', 'Quantico', 'Roboto Slab']
+        },
+        loading: function() {},
+        active: function() { console.log('Fonts Loaded'); startGame();},
+        inactive: function() { console.log('Fonts Failure'); startGame();}
+    });
+	//Setup Game View Parameters
+	var GameView = {Room:{w:512, h:512}, Hud:{w:340}};
+	//Setup Sprites
+	var Sprites = [{name:'spr_character', path:'images/character.png', animated:{count:16,columns:4,w:32,h:48}},
+	{name:'spr_shadow', path:'images/shadow.png', animated:{count:16,columns:4,w:50,h:32,xsep:10}},
+	{path:'images/wall.png', strip:[{name:'spr_wall', tile:{x:0,y:0,w:86,h:86}}, {name:'spr_door', tile:{x:172,y:0,w:172,h:172}}]},
+	{name:'spr_chip', path:'images/microchip.png', animated:{count:4,columns:4,w:256,h:256}},
+	{name:'spr_panel', path:'images/panel.png'},
+	{name:'spr_terminal', path:'images/terminal.png', animated:{count:43,columns:43,w:64, h:36}},
+	{name:'spr_wireless', path:'images/wireless.png'},
+	{name:'spr_link', path:'images/link.png'},
+	{name:'spr_view_obj', path:'images/viewing.png', animated:{count:2,columns:2,w:64,h:64}},
+	{name:'spr_editor_strip', path:'images/editor_strip.png', animated:{count:6,columns:6,w:32,h:32}},
+	{name:'spr_hud_back', path:'images/hud.png'},{name:'spr_text_area', path:'images/text.png'},
+	{name:'spr_button', path:'images/button.png', animated:{count:5,columns:5,w:128,h:64}},
+	{name:'spr_text_label', path:'images/label.png'},
+	{name:'spr_alpha_lamp', path:'images/alpha.png'},
+	{name:'bck_background', path:'images/background.png'}];
+	//Setup sounds
+	var Sounds = [{name:'snd_ambience_music', path:!!window.chrome?'':'sounds/ambience_m.mp3'},
+		{name:'snd_ambience', path:'sounds/ambience.mp3'},
+		{name:'snd_ambience2', path:'sounds/ambience2.mp3'},
+		{name:'snd_ambience3', path:'sounds/ambience3.mp3'},
+		{name:'snd_ambience4', path:'sounds/ambience4.mp3'},
+		{name:'snd_door', path:'sounds/door.mp3'}];
+	var Files = [{name:'levels', path:'levels.dat'}];
+	//Loading Progress Screen
+	var progressBar = function(t, p){
+		var l = p[0].progress;
+		if(!t.w) t.w=0;
+		if(l>t.w) t.w++;
+		t.sprite.beginFill(0x999999);
+		t.sprite.drawRect(124, 246, 208, 24);
+		t.sprite.beginFill(0x55FF55);
+		t.sprite.drawRect(128, 250, t.w*2, 16);
+	}
+	var progressText = function(t, p){
+		var l = p[0].progress;
+		if(t.name != p[1].name) console.log(p[1].name);
+		t.name = p[1].name;
+		t.sprite.align('center');
+		t.sprite.align('bottom');
+		if(l!=100){
+			if(!t.i) t.i=0;
+			var m = '.'.repeat(Math.floor(t.i+=0.1) % 4);
+			if(l) t.sprite.text = '    Loading '+m+'\n'+Math.round(l)+'% Complete';
+		} else t.sprite.text = 'Loading Complete';
+	}
+	var progressBck = function(t, p){
+		if(t.ang == undefined){
+			t.ang = 180
+			//t.sprite.alpha = 0.5;
+		};
+		t.ang-=2;
+		var dir = g.vector_direction(t.ang);
+		t.x+=dir[0];t.y+=dir[1];
+		if(p[0].progress == 100) t.sprite.alpha -= 0.01;
+	}
+	var profBck = function(t, p){
+		if(!t.s){
+			t.s = true;
+			t.sprite.scale.x = t.sprite.scale.y = 0.4;
+			t.sprite.anchor.x = t.sprite.anchor.y = 0.5;
+			t.acc = 2;
+		};
+		t.x+=t.acc;
+		if(p[0].progress == 100) {t.sprite.alpha -= 0.01;t.acc += 0.02;} else {
+			if(t.acc>0.1)t.acc -= 0.1; else if(t.acc>-0.1)t.acc -= 0.0001;
+		}
+	}
+	var profSBck = function(t, p){
+		if(!t.s){
+			t.s = true;
+			t.sprite.scale.x = t.sprite.scale.y = 0.7;
+			t.sprite.alpha = 0.3;
+			t.sprite.anchor.x = t.sprite.anchor.y = 0.5;
+			t.sprite.tint = 0x606060;
+			t.acc = 2;
+		};
+		t.x+=t.acc+0.1;
+		if(p[0].progress == 100) {t.sprite.alpha -= 0.01;t.acc += 0.02;} else {
+			if(t.acc>0.1)t.acc -= 0.1; else if(t.acc>-0.1)t.acc -= 0.0002;
+		}
+	}
+	var hackBck = function(t, p){
+		if(!t.s){
+			t.s = true;
+			t.sprite.scale.x = t.sprite.scale.y = 0.4;
+			t.sprite.anchor.x = t.sprite.anchor.y = 0.5;
+			t.sprite.alpha = 0;
+			t.acc = 0;
+		};
+		t.x+=0.2-t.acc;
+		t.acc += 0.0002;
+		if(p[0].progress==100) {t.sprite.alpha -= 0.013;t.acc += 0.03;}
+			else if(t.sprite.alpha<1)t.sprite.alpha+=0.05;
+	}
+	var labBck = function(t, p){
+		if(!t.s){
+			t.s = true;
+			t.sprite.scale.x = t.sprite.scale.y = 0.3;
+			t.sprite.anchor.x = t.sprite.anchor.y = 0.5;
+			t.sprite.alpha = 0;
+			t.acc = 0;
+		};
+		t.x+=0.1-t.acc;
+		t.acc += 0.0001;
+		if(p[0].progress==100){t.sprite.alpha -= 0.013;t.acc += 0.03;}
+			else if(t.sprite.alpha<1)t.sprite.alpha+=0.05;
+	}
+	var LoadingSprites = [
+		{type:0, path:'images/background.png',step:progressBck, x:-64, y:-16},
+		{type:0, path:'images/prof_loading.png',step:profSBck, x:96, y:220},
+		{type:0, path:'images/prof_loading.png',step:profBck, x:96, y:180},
+		{type:0, path:'images/hack.png',step:hackBck, x:275, y:100},
+		{type:0, path:'images/lab.png',step:labBck, x:325, y:174},
+		{type:2, step:progressBar},
+		{type:1, text:'', style:{fontWeight: 'bold',fontSize: 14, fill:0xFFFFFF}, step:progressText, x:220, y:230}];
+	
+	//Startup
+	function startGame(){
+		if(typeof(GMJS) == 'object'){
+			GMJS.StartGameEngine({
+				onStart:GameInit,
+				images:Sprites,
+				loadingImages:LoadingSprites,
+				loadingRoom:{width:480, height:300},
+				loadingTimeout:3500,
+				sounds:Sounds,
+				room:{width:2400, height:2400},
+				files:Files,
+				view:{width:GameView.Room.w + GameView.Hud.w, height:GameView.Room.h},
+				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return(t.keyboard.control && (!g.get_instance(Cont).textfield.matches(':focus') || e.key == 'S'));},
+				preventDefault:true
+			});
+		} else return console.error('GMJS not found');
+	}
+	
+	window.addEventListener('beforeunload', function(e) {
+		e.preventDefault();
+		e.returnValue = 'Are you sure you wish to close?';
+	});
+	
+	function GameInit(){
+		//Setup Constants
+		const dtr = Math.PI / 180;
+		const GroundedObjects = ['Panel'];
+		//Setup Global Variables
+		var TextSelected = false;
+		var CharacterName = "Prof. Ollie";
+		var KeyboardString = '';
+		var AddressIndex = [];
+		var OnlineData = JSON.parse(g.resource_get('levels').data);
+		
+		for(var i = 0; i < 10; i++){AddressIndex[i] = Math.round(Math.random()*10000);}
+		var GetAddress = function(network){
+			network = network || 0;
+			return 'ABCDEF'[Math.floor(Math.random()*6)]+(AddressIndex[network] += Math.round(Math.random()*10000)).toString(16).padStart(4, '0').toUpperCase();
+		}
+		FindChipset = function(network, address){
+			var ret = null;
+			address = address || '';
+			g.With(NetworkObject, function(ii){
+				if(ii.link.includes(network) && ii.address[network] == address.toUpperCase()){
+					ret = ii;
+					return false;
+				}
+			});
+			return ret;
+		}
+		
+		var CodeBlock = function(machine){
+			var t = this;
+			t.log = [];
+			t.pcache = [];
+			var firmware = machine.firmware,
+				network = machine.network,
+				address = machine.address,
+				hardware = machine.hardware,
+				link = machine.link;
+			Object.defineProperty(t, 'code', {set:function(x){code = x;}, get:function(){return code;}});
+			//Built In Functions
+			var db = {};
+			var builtin = {
+				publish:function(args){t.pcache.push(args[0]);},address:function(){if(!('$_target_network' in db))db['$_target_network'] = machine.network;return address[db['$_target_network']];},
+				set:function(args){return db[args[0]] = args[1];}, get:function(args){return db[args[0]];},
+				add:function(args){var r = 0;for(var x in args) r+=args[x];return r;},nl:function(){return '\n';},
+				concat:function(args){var r = '';for(var x in args) r+=(r==''?'':' ')+args[x];return r;},'null':function(){return null;},
+				sub:function(args){return args[0] - args[1];},'if':function(args){return (args[0] == args[1])?args[2]:args[3];},
+				not:function(args){args=args||[0];return !args[0]},log:function(args){console.log(args);t.log.push(builtin.concat(args));},
+				view_log:function(args){args=args||[0];return t.log[args[0]];},isdef:function(args){args=args||[''];return +(args[0] in cache || args[0] in builtin);},
+				remote:function(args){
+					if(!('$_target_network' in db))db['$_target_network'] = machine.network;
+					var targ = (link.includes(db['$_target_network']))?db['$_target_network']:network;
+					args=args||[0];
+					var chip = FindChipset(targ, args[0]);
+					if(!chip || !args[1]) return 'failed to connect';
+					var list='';
+					for(var i=0;i<args.length-2;i++){list+=' $'+i;}
+					if(chip.code.pcache.includes(args[1]))
+					return chip.code.parse(args[1]+'('+list+')').run(args.slice(2));
+						else
+					return 'bad remote call';
+				}, network:function(args){
+					args = args || [];
+					if(!args.length) return 'No Network Selected';
+					if(!link.includes(args[0])) return 'Out Of Range';
+					return db['$_target_network'] = args[0];
+				},
+				hardware:function(args){
+					if(!args.length) return 'No Hardware Selected';
+					if(!hardware.length) return 'No Hardware Detected';
+					if(hardware.length - 1 < args[0]) return 'Stack Overflow';
+					if(!(args[0] in hardware)) return 'Invalid Hardware ID';
+					var features = hardware[args[0]].features;
+					if(!features.includes(args[1])) return 'Hardware Feature Not Available';
+					var call = hardware[args[0]][args[1]];
+					if(!(call instanceof Function)) return 'Hardware Failed To Operate';
+					return call(args.slice(2));
+				},
+				mbr:function(args){
+					if(!args.length) return db['$_master_boot_record'] || '$__NULL';
+					return db['$_master_boot_record'] = args[0];
+				}
+			}, cache = {};
+
+			function data(head, body){
+				var t = this;
+				t.head = head;
+				t.body = body;
+				t.exec = function(args){
+					var hd = t.head, bltin, tmp;
+					if(typeof(hd) == 'object'){
+						if('a' in hd)
+							hd = args[hd.a];
+						else if(hd instanceof data)
+							hd = hd.exec(args);
+					}
+					if(+hd === hd)
+						return console.error('Illegal Call');
+
+					if((bltin = (hd in builtin)) || (tmp = (hd in cache))){
+						var ar = t.parse(args);
+						if(bltin) return builtin[hd](ar);
+						if(tmp) return cache[hd].run(ar);
+					} else
+						return t.def(hd);
+				};
+				t.parse = function(args){
+					var ar = [];
+					for(var i = 0; i < t.body.length; i++){
+						var p = t.body[i];
+						if(+p === p || typeof(p) == 'string')
+							ar.push(p);
+						else if('a' in p){
+							ar.push((args.length-1<p.a)?'':args[p.a]);
+						}
+						else if(p instanceof data)
+							ar.push(p.exec(args));
+						else console.error('Bad Argument:', ar);
+					}
+					return ar;
+				}
+				t.run = function(args){
+					try{
+						args = args || [];
+						for(var i = 0, r; i < t.body.length; i++){
+							var p = t.body[i];
+							if(+p===p || typeof(p) == 'string')
+								r = p;
+							else if('a' in p)
+								r = (args.length-1<p.a)?0:args[p.a];
+							else if(p instanceof data)
+								r = p.exec(args);
+							else console.error('Bad Code:', p);
+						}
+						return r;
+					} catch (e){
+						return (e instanceof RangeError)?'Max Call Stack':console.error('Unknown Error',e);
+					}
+				};
+				t.def = function(hd){
+					cache[hd] = t;
+					return hd;
+				};
+			}
+
+			t.parse = function(block, clearcache){
+				var bc = [], c, nsec;
+				cache = (clearcache = clearcache || false)?{}:cache;
+				block = block || '';
+				block = block.replace(/(\$?)(\d+)|([0-9a-z,./<>_\-?!@#%^&*;':"\[\]{}]+)/ig, function(r, a, n, f){
+					bc.push(f?f:a?{a:+n}:+n);
+					return '\0'+(bc.length-1)+'\0';
+				});
+				nsec = bc.length;
+				do{
+					c = false;
+					block = block.replace(/(\0\d+\0)\s*\(([^\(\)]*)\)/g, function(r, head, body){
+						c = true;
+						bc.push(new data(head, body));
+						return '\0'+(bc.length-1)+'\0';
+					});
+				} while(c);
+				bc.push(new data('', block));
+				for(var i = nsec, j; i < bc.length; i++){
+					var ii = bc[i],
+						o = ii.body.split('\0'),
+						h = ii.head.slice(1, -1);
+					ii.body = [];
+					ii.head = bc[+h];
+					for(j = 1; j < o.length; j+=2)
+						ii.body.push(bc[+o[j]]);
+				}
+				return bc[bc.length-1];
+			}
+		}
+		var filterCode = function(code){//Filter editor-set code: Replace Object IDs with appropriate addresses
+			return code.replace(/(\/%)|%(\d+|\w+)%(\d+)?/g, function(r, x, n, t){
+				if(+n==n){n=+n;t=+t||0;var ii=instance_sid(n), a=ii?(ii.address[t]||'000000'):'000000';} else {a='unknown';if(n=='RAND')a=Math.round(Math.random()*100000);};return x?'%':a;
+			});
+		}
+		
+		instance_sid = function(sid){
+			var r = null; if(+sid !== sid) return r;
+			g.With(HardwareObject, function(t){if(sid == (r=t).sid) return false;})
+			return r;
+		}
+		
+		var createObject = function(id, xx, yy, o, t, host){
+			var prop = host?{owner:host}:{}, obj_list=false;
+			switch(o){
+				case Wall:obj_list = true;prop.private = t.private;prop.modify = t.modify;prop.sid = t.sid;prop.haschip = t.haschip;break;
+				case DoorPanel: prop.dir = t.direction;prop.open = t.opened;break;
+				case FloorPanel: prop.dir = t.direction;break;
+				case LinkChip: break;
+				case TerminalWindow: break;
+				case Wireless:break;
+			}
+			var hdw = o.instance_create(xx, yy, prop);
+			hdw.sid = id?id:hdw.sid;
+			if(host){
+				switch(o){
+					case Wireless:host.hacked = host.hardware.length;break;
+				}
+				host.hardware.push(hdw);
+				hdw.depth=host.depth-2;
+			}
+			if(obj_list && hdw.chip){
+				for(var i in t.network){hdw.chip.link[i] = +t.network[i];}
+				getE('obj').innerHTML += '<option value="'+hdw.id+'">'+hdw.object_index.name+'('+hdw.sid+')</option>';
+				getE('obj').value = hdw.id;
+			}
+			return hdw;
+		}
+		
+		//Game editor step event
+		var editor_step = function(t){
+			var xx = Math.floor(Math.max(g.view.x + 16, Math.min(g.view.x+GameView.Room.w-16, g.mouse_x))/32)*32 + 16, yy = Math.floor(Math.max(g.view.y+16, Math.min(g.view.y+GameView.Room.h-16, g.mouse_y))/32)*32 + 16,
+				newObject = t.ObjectList[t.EditorSelection],
+				sel = g.get_instance(+getE('obj').value),sx,sy,
+				hdwsel = g.get_instance(+getE('child').value),hx,hy,
+				ctsel = getE('codetype').value;
+			t.graphics.beginFill(0x99AA99, 0.5);
+			t.graphics.drawRect(xx-16,yy-16,32,32);
+			if(t.ig_sel != sel){
+				t.ig_sel = sel;
+				t.editorSelectObject.time = 2;
+			}
+			
+			if(sel){
+				if(t.hd_sel != hdwsel) t.hd_sel = hdwsel;
+				sx = sel.x, sy = sel.y;
+				t.graphics.beginFill(0x7777AA, 0.5);
+				t.graphics.drawRect(sx-16,sy-16,32,32);
+				if(t.ct_sel != ctsel){
+					t.ct_sel = ctsel;
+					t.editorSelectCode.time = 2;
+				}
+				if(hdwsel){
+					hx = hdwsel.x, hy = hdwsel.y;
+					t.graphics.beginFill(0xAA5555, 0.7);
+					t.graphics.drawCircle(hx,hy,14);
+				}
+			}
+			if(g.mouse_x < g.view.x + GameView.Room.w && g.mouse_y < g.view.y + GameView.Room.h){
+				if(g.mouse_check_pressed()){
+					if(!g.keyboard.control){if(g.keyboard.shift && !g.collision_point(xx, yy, newObject[0])){
+						var host;
+						if((newObject[1] == 0 && !g.collision_point(xx, yy, EditorObject)) || (newObject[1] == 1 && (host=g.collision_point(xx, yy, WallObjects))) || (newObject[1] == 2 && !g.collision_point(xx, yy, NonAttachable))){
+							var prop = host?{owner:host[0]}:{}, obj_list=false;
+							switch(newObject[0]){
+								case Wall:obj_list = true;prop.private = t.private;prop.modify = t.modify;prop.net = t.network;prop.haschip=true;break;
+								case DoorPanel: prop.dir = t.direction;prop.open = t.opened;break;
+								case FloorPanel:prop.dir = t.direction;break;
+								case LinkChip: prop.link = [t.network];break;
+								case TerminalWindow: prop.terminal = t.use_terminal; break;
+							}
+							var hdw = newObject[0].instance_create(xx, yy, prop);
+							t.editorSelectObject.time = 2;
+							if(host){
+								host[0].hardware.push(hdw);
+								hdw.depth=host[0].depth-2;
+							}
+							if(obj_list){
+								getE('obj').innerHTML += '<option value="'+hdw.id+'">'+hdw.object_index.name+'('+hdw.sid+')</option>';
+								getE('obj').value = hdw.id;
+							}
+						}
+					}} else {
+						var o;if(o=(g.collision_point(xx, yy, WallObjects)||g.collision_point(xx, yy, Wireless))){
+							getE('obj').value = o[0].id;
+						}
+					}
+				}
+				if(g.mouse_check_pressed('right')){
+					var o;
+					if(o=(g.collision_point(xx, yy, EditorObject))){
+						var ii, e = getE('obj');
+						for(ii in e){if(!e[ii])return;if(e[ii].value == o[0].id){e.remove(ii);break;}}
+						o[0].instance_destroy();
+					}
+				}
+			}
+			if(g.mouse.ywheel){
+				t.EditorSelection = (t.EditorSelection+(g.mouse.ywheel>0)+(g.mouse.ywheel<0?t.ObjectList.length-1:0))%t.ObjectList.length;
+				t.curitem.image_single = t.EditorSelection;
+				g.mouse.ywheel = 0;
+			}
+			if(g.keyboard.control && g.keyboard_check_pressed('S')){
+				var name = t.levelname.text;
+				t.levelname.text = t.levelname.text.replace(/([^a-zA-Z0-9_])\g/, '');
+				localStorage['level_'+name] = SaveLevel();
+			}
+			if(g.keyboard.control && g.keyboard_check_pressed('L')){
+				var name = t.levelname.text;
+				t.levelname.text = t.levelname.text.replace(/([^a-zA-Z0-9_])\g/, '');
+				LoadLevel(localStorage['level_'+name], true);
+			}
+		}
+		
+		var AddToRegion = function(t){
+			var ii, xx, yy;
+			VisibilityObjects.push(t);
+			xx = Math.floor(t.x/256);
+			yy = Math.floor(t.y/256);
+			ii = xx + yy*Math.floor(g.room.width/256);
+			if(!Region[ii]) Region[ii] = [];
+			Region[ii].push(t);
+		}
+		
+		SaveLevel = function(name){
+			name = name || '';
+			name = name.replace(/([^a-zA-Z0-9_])\g/, '');
+			var data, hlen, hdw, h, type,
+				spawn = g.get_instance(SpawnPoint);
+			var header = '***HLM000', version = '1';
+			
+			data = [header, version, name, '', ''].join(',')+';';
+			data += [Math.floor(spawn.x/32), Math.floor(spawn.y/32)].join(',')+';';
+			g.With(Wall, function(t){
+				hdw = '';
+				//if(t.hacked) t.hardware.push(t.hacked);
+				hlen = t.hardware.length;
+				for(var i = 0; i < hlen; i++){
+					h = t.hardware[i];
+					type = h.object_index.name;
+					switch(type){
+						case 'Chipset': hdw += [0,h.sid,encode.hex.to(h.software), encode.hex.to(h.firmware), +h.private, encode.hex.to(JSON.stringify(h.modify)), h.link.join('.')].join('*');break;
+						case 'Terminal': hdw += [1,h.sid].join('*');break;
+						case 'Door': hdw += [2,h.sid,+h.direction, +h.openD].join('*');break;
+						case 'Panel': hdw += [3,h.sid,+h.direction].join('*');break;
+						case 'Link': hdw += [4,h.sid].join('*');break;
+						case 'Wireless':hdw += [5,h.sid].join('*');break;
+					}
+					hdw += ',';
+				}
+				data += [t.sid, Math.floor(t.x/32), Math.floor(t.y/32), hlen, hdw].join(',')+';';
+			});
+			return encode.base64.to(encode.lzw.to(data));
+		}
+		
+		LoadLevel = function(data, editor){
+			var i, ii, j, hardware, host, Create, prop, xx, yy,
+				header, valid_header = '***HLM000', version, chipset;
+			g.With(EditorObject, function(t){t.instance_destroy();});
+			g.With(Player, function(t){t.instance_destroy();});
+			VisibilityObjects = [];
+			Region = [];
+			if(!data) return console.error('No Level Data');
+			data = encode.lzw.from(encode.base64.from(data)).split(';');
+			header = data[0].split(',');
+			if(header[0] != valid_header || header.length < 5) return console.error('Corrupt Level');
+			version = header[1];
+			name = header[2]; //header[3];header[4];//Unused
+			for(i = 1; i<data.length-1;i++){
+				ii = data[i].split(',');
+				hardware = [];
+				if(i == 1){
+					createObject(null, +ii[0]*32+16, +ii[1]*32+16, SpawnPoint, {});
+					continue;
+				}				
+				xx = +ii[1]*32+16;yy = +ii[2]*32+16;
+				for(j=0;j<ii[3];j++){
+					hardware.push(ii[4+j].split('*'));
+				}
+				chipset = hardware.length?{sid:+hardware[0][1],private:!!+hardware[0][4],modify:JSON.parse(encode.hex.from(hardware[0][5])),network:hardware[0][6].split('.'),haschip:true}:{haschip:false};
+				host = createObject(+ii[0], xx, yy, Wall, chipset);
+				if(host.chip){
+					host.chip.software = encode.hex.from(hardware[0][2]);
+					host.chip.firmware = encode.hex.from(hardware[0][3]);
+				}
+				for(j=1;j<hardware.length;j++){
+					prop = {};
+					Create = null;
+					switch(+hardware[j][0]){
+						case 0:Create = Chipset;prop.software = hardware[j][2];prop.firmware = hardware[j][3];prop.private = !!+hardware[j][4];prop.modify = JSON.parse(encode.hex.from(hardware[j][5]));prop.network = hardware[j][6].split('.'); break;
+						case 1:Create = TerminalWindow; break;
+						case 2:Create = DoorPanel;prop.direction = +hardware[j][2];prop.opened = !!+hardware[j][3];break;
+						case 3:Create = FloorPanel;prop.direction = +hardware[j][2];break;
+						case 4:Create = LinkChip;break;
+						case 5:Create = Wireless;break;
+					}
+					if(!Create) {console.error('Unknown Hardware Object: '+hardware[j][0]);continue;}
+					createObject(+hardware[j][1], xx, yy, Create, prop, host);
+				}
+			}
+			var cont = g.get_instance(Cont);
+			if(!editor){
+				cont.startGame.time = 10;
+			} else {
+				if(cont.player) cont.startEditor();
+			}
+		}
+		
+		var RestoreBackup = function(){
+			LoadLevel(localStorage.backup_level, true);
+		}
+		
+		//Setup Fonts
+		var HudLabelFont = g.create_text_style({fontFamily: 'Quantico', fontWeight: 'bold',fontSize: 14, fill:0x222290});
+		var HudTextFont = g.create_text_style({fontFamily: 'Roboto Slab', fontSize: 10, fill:0xE0FFE0});
+		var HudBtnFont = g.create_text_style({fontFamily: 'Coda', fontSize: 12, fill:0xE0E9E0});
+		var HudTinyFont = g.create_text_style({fontFamily: 'Coda', fontSize: 8, fill:0x30FF30});
+		//Setup Objects
+		
+		var HardwareObject = new g.object({
+			creation:function(t){
+				t.sid = t.id;//Static ID
+				t.seen = t.vis = 0;
+			},
+			step:function(t){
+				//if(VisibilityObjects.includes(t)) return;
+				//if(t.owner) t.image_alpha = t.owner.vis;
+			}
+		});
+		
+		// -- Hud Objects
+		var HudPosition = new g.object({
+			depth:-30,
+			creation:function(t){
+				t.xx = t.x + 32;t.yy = t.y;//Hud Position
+				t.selected = false;
+				t.onclick = function(){};
+			},
+			destroyed:function(t){
+				t.text.destroy();
+			},
+			end_step:function(t){
+				t.x = (g.view.x + g.view.width - GameView.Hud.w + t.xx);
+				t.y = (g.view.y + t.yy);
+				if(g.mouse_check_pressed()){TextSelected = t.selected = false;KeyboardString = '';}
+				if(g.mouse_click(t, g.mouse_check_pressed)) t.onclick();
+			}
+		});
+		var Hud = new g.object({
+			image:'spr_hud_back',
+			depth:-10,
+			tiled:true,
+			creation:function(t){
+				t.sprite.width = t.sprite.texture.width;
+				t.xscale = GameView.Hud.w/t.sprite.texture.width;
+				t.sprite.height = Math.max(t.sprite.texture.height, GameView.Room.h/1.3);
+				t.yscale = GameView.Room.h/t.sprite.height;
+			},
+			end_step:function(t){
+				t.x = (g.view.x + g.view.width - GameView.Hud.w/2);
+				t.y = (g.view.y + g.view.height - GameView.Room.h/2);
+			}
+		});
+		var TextArea = new g.object({
+			image:'spr_text_area',
+			parent:HudPosition,
+			creation:function(t, text){
+				t.inherited();
+				t.xscale = 1.3;
+				t.yscale = 1.1;
+				t.cursor = false;
+				t.enabled = true;
+				t.command = false;
+				t.cmd_list = [];
+				t.cmd_pos = 0;
+				t.cmd_lock = false;
+				t.allow_newline = true;
+				t.maxLength = t.sprite.width - 30;
+				t.looping = 0;
+				t.code = [];
+				t.view = 0;
+				t.unselected = function(){};
+				t.onselect = function(){};
+				t.cursor_left = function(force){
+					if(!t.cursor_loop.time || force){t.pos[1] = t.pos[1]?Math.min(t.pos[1]-1, t.data[t.pos[0]].length):(t.pos[0]?t.data[(--t.pos[0])].length:0);t.cursor_loop.time = 10;}
+				}
+				t.cursor_right = function(force){
+					if(!t.cursor_loop.time || force){t.pos[1] = t.pos[1]<t.data[t.pos[0]].length?t.pos[1]+1:(t.pos[0]<t.data.length-1?!(++t.pos[0]):t.data[t.pos[0]].length);t.cursor_loop.time = 10;}
+				}
+				t.cursor_up = function(force){
+					if(!t.cursor_loop.time || force){if(!t.pos[0])return true;t.pos[0] = t.pos[0]?t.pos[0]-1:0;t.pos[1] = Math.min(t.pos[1], t.data[t.pos[0]].length);t.cursor_loop.time = 10;}
+				}
+				t.cursor_down = function(force){
+					if(!t.cursor_loop.time || force){if(t.pos[0]==t.data.length-1)return true; t.pos[0] = t.pos[0] < t.data.length-1?t.pos[0]+1:t.pos[0];t.pos[1] = Math.min(t.pos[1], t.data[t.pos[0]].length);t.cursor_loop.time = 10;}
+				}
+				t.new_line = function(){
+					var line = t.data[t.pos[0]],
+						ml = line.slice(0, t.pos[1]);
+					t.data[t.pos[0]] = line.slice(t.pos[1], line.length);
+					t.data.splice(t.pos[0], 1, ml, t.data.slice(t.pos[0])[0]);
+					t.cursor_right(true);
+				}
+				t.data = text?text.split('\n'):[''];
+				Object.defineProperty(t, 'text', {set:function(x){t.data = [];t.pos=[0,0];return t.data = x?x.split('\n'):[''];}, get:function(){return t.data.join('\n');}});
+				t.pos = (t.data.length)?[t.data.length-1, t.data[t.data.length-1].length]:[0,0];
+				t.add_line = function(){
+					var n = t.code.length;
+					t.code[n] = g.create_text('', t.x, t.y, HudTextFont);
+					t.code[n].align('center');t.code[n].align('left');
+					t.code[n].depth = t.depth - 1;
+					t.code[n].bad = false;
+				}
+				
+				t.onclick = function(){if(!t.enabled) return;t.selected = true;t.onselect();t.cursor_flash.time = 15;};
+			},
+			destroyed:function(t){
+				for(var ln in t.data){
+					if(t.code[ln]) t.code[ln].destroy();
+				}
+			},
+			end_step:function(t){
+				t.inherited();
+				var b = 12;
+				t.graphics.beginFill(t.selected?0X88AA88:t.enabled?0XAACCAA:0X995555, t.selected?0.6:0.3);
+				t.graphics.depth = t.depth + 1;
+				t.graphics.drawRect(t.x - t.sprite.width/2 + b*t.xscale, t.y - t.sprite.height/2 + b*t.yscale, t.sprite.width - b*2*t.xscale, t.sprite.height - b*2*t.yscale);
+				if(g.mouse_click(t,g.mouse_check_pressed,'right')){
+					console.log(t.text);
+				}
+				if(t.selected){
+					if(!t.enabled) {t.selected = false;TextSelected = false;return;}
+					var line = t.data[t.pos[0]];
+					if(!g.keyboard_any()) {
+						t.loop.time = 0;
+						t.cursor_loop.time = 0;
+						t.looping = 0;
+					}
+					if(g.keyboard_check_released('up') || g.keyboard_check_released('down')) t.cmd_lock = false;
+					if(KeyboardString.length){
+						if(!g.keyboard.control) t.data[t.pos[0]] = line.slice(0, t.pos[1]) + KeyboardString[0] + line.slice(t.pos[1]++);
+						KeyboardString = '';
+					}
+					if(g.keyboard.left) t.cursor_left();
+						else if(g.keyboard.right) t.cursor_right();
+						else if(g.keyboard.up) {if(t.cursor_up() && !t.cmd_lock){
+							t.cmd_lock = true;
+							if(!t.cmd_list.length)return;
+							t.text = t.cmd_list[t.cmd_pos--];
+							t.cmd_pos = Math.max(t.cmd_pos, 0);
+						}} else if(g.keyboard.down){if(t.cursor_down() && !t.cmd_lock){
+							t.cmd_lock = true;
+							if(t.cmd_pos < t.cmd_list.length-1)
+								t.text = t.cmd_list[++t.cmd_pos];
+							else t.text = '';
+						}} else if(g.keyboard.home) t.pos[1] = 0;
+						else if(g.keyboard.end) t.pos[1] = line.length;
+						else if(!t.loop.time && !t.cursor_loop.time){
+							if(g.keyboard.backspace){
+								if(!t.pos[1]){
+									if(t.pos[0] && (t.code[t.pos[0]-1].width + (line.length?t.code[t.pos[0]].width:-10) < t.maxLength)){
+										t.code[t.pos[0]].bad = true;
+										var ml = t.data.splice(t.pos[0],1)[0];
+										t.cursor_left(true);
+										t.data[t.pos[0]] += ml;
+									}
+								} else {
+									t.data[t.pos[0]] = g.keyboard.shift?'':line.slice(0, t.pos[1]-1) + line.slice(t.pos[1]);
+									t.cursor_left(true);
+								}
+								t.loop.time = 41 - 10*t.looping;
+							} else if(g.keyboard.del){
+								if(t.pos[1] != t.data[t.pos[0]].length){
+									t.data[t.pos[0]] = line.slice(0, t.pos[1]) + line.slice(t.pos[1]+1);
+								} else if(t.pos[0] != t.data.length-1){
+									t.code[t.pos[0]].bad = true;
+									var ml = t.data.splice(t.pos[0]+1, 1)[0];
+									t.data[t.pos[0]] += ml;
+								}
+								t.loop.time = 41 - 10*t.looping;
+							} else if(g.keyboard.enter){
+								if(!!t.command && !g.keyboard.shift){if(g.keyboard_check_pressed('enter')){
+									t.command(t.text);t.text = '';t.cmd_pos = t.cmd_list.length-1;
+								}return;}
+								if(t.allow_newline){
+									t.new_line();
+									t.loop.time = 41 - 10*t.looping;
+								}
+							}
+					}
+					t._unselected.time = 2;
+				}
+				if(!t.selected){
+					if(g.mouse_click(t, function(){return (g.mouse.ywheel>0);})){
+						g.mouse.ywheel = 0;t.view++;
+					}
+					if(g.mouse_click(t, function(){return (g.mouse.ywheel<0);})){
+						g.mouse.ywheel = 0;t.view--;
+					}
+				}
+				if(t.selected)
+					t.view = t.view + (t.pos[0] - t.view > t.sprite.height/20) - (t.view - t.pos[0] > 0);
+				else t.view = Math.min(Math.max(t.view, 0), Math.max(t.data.length - Math.round(t.sprite.height/18), 0));
+				for(var i = 0; i < Math.max(t.code.length, t.data.length);i++){
+					if(t.code.length < t.data.length) t.add_line();
+					if(t.code[i].bad) {t.code.splice(i,1)[0].destroy();if(i == t.code.length) break;}
+					var line = t.data[i];
+					
+					if(t.pos[0] == i && t.selected){
+						var c=line.slice(t.pos[1],t.pos[1]+1);
+						t.code[i].text = line.slice(0, t.pos[1]) + (t.cursor?'|':' ') + line.slice(t.pos[1]);
+					} else {
+						t.code[i].text = line;
+					}
+					
+					if(t.code[i].width > t.maxLength && t.selected){
+						var m = (t.pos[1] >= t.data[i].length);
+						var r = t.data[i].length-t.pos[1];
+						if(m) for(var z=0;z<=r;z++)t.cursor_left(true);
+						t.new_line();
+						if(m) for(var z=0;z<=r;z++)t.cursor_right(true);
+					}
+					t.code[i].x = t.x - t.sprite.width/2+16;t.code[i].y = (t.y - t.sprite.height/2+20-1.1/t.yscale) + 14*i-14*t.view;
+					t.code[i].visible = (t.code[i].y > (t.y - t.sprite.height/2 + 14) && t.code[i].y < (t.y + t.sprite.height/2-15*t.yscale));
+				}
+			},
+			alarms:[{name:'cursor_flash', code:function(t){
+				t.cursor_flash.time = 35*t.selected;t.cursor = !t.cursor;TextSelected = t.selected;
+			}}, {name:'loop', code:function(t){
+				t.looping = Math.min(t.looping + 1, 3.8);
+				t.cursor_loop.time = 0;
+			}},{name:'cursor_loop', code:function(t){
+			}},{name:'_unselected', code:function(t){t.unselected();}}]
+		});
+		var Label = new g.object({
+			image:'spr_text_label',
+			parent:HudPosition,
+			creation:function(t, text){
+				t.inherited();
+				t.text = g.create_text(text, t.x, t.y, HudLabelFont);
+				t.text.align('center');
+				t.text.depth = t.depth - 1;
+				t.xscale = 0.8; t.yscale = 0.5;
+				t.onclick = function(){};
+			},
+			end_step:function(t){
+				t.inherited();
+				var b = 5;
+				t.graphics.beginFill(0XCCEEAA, 0.8);
+				t.graphics.depth = t.depth + 1;
+				t.graphics.drawRect(t.x - t.sprite.width/2 + b, t.y - t.sprite.height/2 + b, t.sprite.width - b*2, t.sprite.height - b*2);
+				t.text.x = t.x;t.text.y = t.y;
+			}
+		});
+		var Button = new g.object({
+			image:'spr_button',
+			parent:HudPosition,
+			creation:function(t, text){
+				t.inherited();
+				var enabled = true;
+				Object.defineProperty(t, 'size',{set:function(x){t.xscale = t.yscale = x;}, get:function(){return (t.xscale+t.yscale)/2;}});
+				Object.defineProperty(t, 'enabled', {set:function(x){enabled = x;t.image_single = x?(t.switch?(t.image_single==4||t.image_single==2?2:0):0):(t.switch?(t.image_single==4||t.image_single==2?4:3):3);}, get:function(){return enabled;}});
+				Object.defineProperty(t, 'down', {set:function(x){if(x!=t.down && t.switch) t.pressed(x); t.image_single = t.image_single>2?(x?4:3):(x?2:0);if(x && !t.switch){t.pressed(1);t.mouse_off.time = 5;}}, get:function(){return (t.image_single == 2 || t.image_single == 4);}})
+				t.text = g.create_text(text, t.x, t.y, HudBtnFont);
+				t.text.align('center');
+				t.text.depth = t.depth - 1;
+				t.switch = false;//Switch feature allows turning something on/off
+				t.image_single = 0;
+				t.onclick = function(){}
+				t.pressed = function(){}
+			},
+			end_step:function(t){
+				t.inherited();
+				if(g.mouse_check_released()){
+					if(t.image_single == 2 && !t.switch){
+						t.image_single = 0;t.mouse_on.time = 1;t.pressed();
+					}
+				}
+				if(g.mouse_click(t, function(){return 1;}) && t.enabled) t.mouse_off.time = 2; else t.mouse_on.time = 2;
+				
+				if(g.mouse_click(t, g.mouse_check_pressed) && t.enabled){
+					t.image_single = t.switch?(t.image_single==2? 1:2):(t.image_single==1?2:t.image_single);
+					if(t.switch) t.pressed(t);
+				}
+				var pressed = !!(t.image_single==2||t.image_single==4);
+				if(!t.text.transform) return;
+				t.text.x = t.x+pressed*1.5;t.text.y = t.y+pressed*2;
+			},
+			alarms:[{name:'mouse_on', code:function(t){if(t.image_single<2) t.image_single = 1;}}, {name:'mouse_off', code:function(t){if(t.image_single == 1 || (t.image_single == 2 && !t.switch)) t.image_single = 0;if(t.image_single == 4 && !t.switch) t.image_single = 3;}}
+			]
+		});
+		// --
+		// --Game Hud
+		var ViewingItem = new g.object({
+			image:'spr_view_obj',
+			parent:HudPosition,
+			creation:function(t){
+				t.inherited();
+				t.image_single = 0;
+				t.graphics.depth = t.depth + 1;
+				t.xscale = t.yscale = 0.35;
+				t.text = g.create_text('', 0, 0, HudTinyFont);
+				t.text.align('center');
+				t.text.depth = t.depth - 3;
+			},
+			end_step:function(t){
+				t.inherited();
+				t.graphics.beginFill(0xEEEEEE, 0.25);
+				t.graphics.lineStyle(2, 0x102010, 0.5);
+				t.graphics.drawRect(t.x-14, t.y-14, 28, 28);
+				t.text.x = t.x + 10; t.text.y = t.y + 8;
+			}
+		});
+		// --
+		// --Editor Hud
+		var CurrentItem = new g.object({
+			image:'spr_editor_strip',
+			parent:HudPosition,
+			creation:function(t){
+				t.inherited();
+				t.image_single = 0;
+				t.graphics.depth = t.depth + 1;
+			},
+			destroyed:function(t){},
+			end_step:function(t){
+				t.inherited();
+				t.graphics.beginFill(0xFFFFFF, 0.9);
+				t.graphics.drawRect(t.x-18, t.y-18, 36, 36);
+			}
+		});
+		// -- Editor Objects
+		var EditorObject = new g.object({
+			parent:HardwareObject
+		});
+		var NonAttachable = new g.object({
+			parent:EditorObject
+		});
+		var SpawnPoint = new g.object({
+			parent:NonAttachable,
+			creation:function(t){
+				g.With(SpawnPoint, function(tt){tt.instance_destroy();});
+			},
+			step:function(t){
+				t.graphics.beginFill(0x5555B0, 0.7);
+				t.graphics.drawCircle(t.x, t.y, 16);
+			}
+		});
+		
+		// --
+		VisibilityObjects = [];
+		Region = [];
+		var Background = new g.background({
+			image:'bck_background'
+		});
+		var CollisionWalls = new g.object({
+			parent:EditorObject
+		});
+		var NetworkObject = new g.object({
+			parent:HardwareObject,
+			creation:function(t){
+				t.address = {};
+				t.sn = '0x'+(99+ Math.round(Math.random()*99999)).toString(16).padStart(6, '0').toUpperCase();//Serial Number
+				t.sid = t.id;//Static ID
+			}
+		});
+		
+		var WallObjects = new g.object({
+				parent:CollisionWalls,
+				creation:function(t, opt){
+					t.sid = t.id;//Static ID
+					AddToRegion(t);
+					opt = opt || {};
+					t.details = '';
+					t.hardware = [];
+					if(!('net' in opt)) opt.net = 0;
+					if(!('private' in opt)) opt.private = false;
+					if(!('modify' in opt)) opt.modify = {};
+					if(!('sid' in opt)) opt.sid = null;
+					t.depth = g.room.height - t.y;
+					t.xscale = t.yscale = 32/86;
+					var w = t.sprite.width/2 - 8, h = t.sprite.height/2 - 8;
+					if(opt.haschip){
+						t.chip = Chipset.instance_create(t.x + Math.random()*w*2-w,t.y + Math.random()*h*2-h,opt.net);
+						if(opt.sid) t.chip.sid = opt.sid;
+						t.chip.owner = t;
+						t.chip.depth = t.depth - 1;
+						t.chip.private = opt.private;
+						t.hardware.push(t.chip);
+						for(var o in opt.modify) t.chip.modify[o] = opt.modify[o];
+						t.addNetworkAddress.time = 4;
+					} else t.chip = null;
+					t.cmd_list = [];
+					t.cmd_pos = 0;
+					t.graphics.depth = t.depth - 10;
+					var screen = '';//Terminal Screen
+					t.screenPos = 0;//Terminal Screen Last Position
+					t.refresh = false;//Screen Request Refresh
+					Object.defineProperty(t, 'screen', {set:function(x){screen = x;t.refresh = true;}, get:function(){t.refresh = false;return screen;}})//Access Screen
+					t.command = ['',[0,0]];//Terminal Command Left Behind
+				},
+				destroyed:function(t){
+					for(var i in t.hardware){
+						t.hardware[i].instance_destroy();
+					}
+				},
+				alarms:[{name:'addNetworkAddress', code:function(t){
+					for(var x in t.chip.link){
+						t.details += '\nNetwork Address - ' + (t.chip.private?'Unknown':t.chip.link[x].toString().padStart(2, '0')+'x'+t.chip.address[t.chip.link[x]]);
+					}
+				}}]
+			});
+		Cont = new g.object({
+			creation:function(t){
+				//console.log(t);
+				//[Object, 0:Grounded|1:Hardware|2:Both]
+				t.music = false;
+				t.selected_regions = [];
+				t.amb = [g.sound_play('snd_ambience', {loop:true, volume:0}),
+					g.sound_play('snd_ambience2', {loop:true, volume:0.}),
+					g.sound_play('snd_ambience3', {loop:true, volume:0}),
+					g.sound_play('snd_ambience4', {loop:true, volume:0})];
+				t.amb[0].vol = 0.3;
+				t.amb[1].vol = 0.05;
+				t.amb[2].vol = 0.05;
+				t.amb[3].vol = 0;
+				t.songs = [[0,134],[138,273],[276,426],[426,537],[537,640],
+					[640,755],[755,842],[842,974],[974,1126],[1126,1220],
+					[1220,1315],[1315,1465],[1465,1630],[1630,1734],[1734,1840]];
+				t.ambience.time = 100;
+				t.ambience_m.time = 300;
+				t.CurrentLevel = '';
+				t.death_transition = t.transition = false;
+				t.ObjectList = [[Wall,0], [SpawnPoint,0], [LinkChip,1], [DoorPanel,1], [TerminalWindow,1], [FloorPanel, 1]]; //Object list for editor objects: [<Object> , <Is Hardware>]
+				t.EditorSelection = 0;
+				t.player = null;
+				//--Editor Hud Values
+				Object.defineProperty(t, 'modify_firm', {set:function(x){t.modify.firm = x;}, get:function(){return t.modify.firm;}});
+				Object.defineProperty(t, 'modify_soft', {set:function(x){t.modify.soft = x;}, get:function(){return t.modify.soft;}});
+				Object.defineProperty(t, 'network', {set:function(x){getE('network').value=+x;}, get:function(){return +getE('network').value;}})
+				//--
+				var createBtn = function(x, y, s, size, f){
+					var btn = Button.instance_create(x, y, s);
+					btn.size = size;
+					btn.pressed = f;
+					return btn;
+				}, createSwitch = function(x, y, s, size, v){
+						var btn = Button.instance_create(x, y, s);
+						btn.size = size;
+						btn.switch = true;
+						btn.down = t[v];
+						btn.pressed = function(p){t[v] = p.down;};
+						return btn;
+					};
+				var create_hud = function(){
+					t.transition = FadeTransition.instance_create(0,0,{from:0.5, onComplete:function(){
+						t.transition = false;
+					}});
+					createBtn(270, 16, 'Restart', 0.33, t.restartLevel);
+					t.looking = Label.instance_create(140,32,'');
+					ViewingItem.instance_create(16, 32);
+					t.codeArea = TextArea.instance_create(128,170,'');
+					t.codeArea.enabled = false;
+					t.command = '';//Current command being passed
+					t.commandLine = TextArea.instance_create(128,260,'');
+					t.commandLine.command = function(cmd){t.command = cmd;}
+					t.commandLine.onselect = function(){console.log(t.player.target.cmd_list);t.commandLine.cmd_list = t.player.target.cmd_list;t.commandLine.cmd_pos = t.player.target.cmd_pos;}
+					t.commandLine.allow_newline = false;
+					t.commandLine.enabled = false;
+					t.commandLine.yscale = 0.25;
+					t.controlArea = TextArea.instance_create(128,360,'');
+					t.controlArea.enabled = false;
+					t.message = TextArea.instance_create(235,455,'');
+					t.message.enabled = false;
+					t.message.xscale = 0.6;
+					t.message.yscale = 0.25;
+					
+					t.codeView = '';
+					t.btn_push = Button.instance_create(32, 455, 'Update');
+					t.btn_pull = Button.instance_create(120, 455, 'Download');
+					t.btn_push.size = t.btn_pull.size = 0.6;
+					t.btn_push.pressed = function(){
+						var code;
+						switch(t.codeView){
+							case 'soft':code='software';break;
+							case 'firm':code='firmware';break;
+							default:t.message.text = 'Upload Failed';return;
+						}
+						t.player.target.chip[code] = t.controlArea.text;
+						t.codeArea.text = t.controlArea.text;
+						t.message.text = 'Upload Successful';
+						t.messageClear.time = 100;
+					}
+					t.btn_pull.pressed = function(){
+						var code = '';
+						switch(t.codeView){
+							case 'soft':code=t.player.target.chip.software;break;
+							case 'firm':code=t.player.target.chip.firmware;break;
+							default:t.message.text = 'Download Failed';return;
+						}
+						t.controlArea.text = code;
+						t.message.text = 'Download Successful';
+						t.messageClear.time = 100;
+					}
+					t.hud_control = function(b, prop){b=(+b===b)?b:b||false;prop = prop||'enabled'; t.btn_push[prop] = t.btn_pull[prop] = t.controlArea[prop] = b;if(!t.controlArea.enabled)t.controlArea.text = '';}
+					t.hud_control(false);
+					
+					t.btn_soft = Button.instance_create(40, 80, 'Software');
+					t.btn_firm = Button.instance_create(100, 80, 'Firmware');
+					t.btn_term = Button.instance_create(160, 80, 'Terminal');
+					t.btn_key = Button.instance_create(225, 80, 'Encryption');
+					t.hud_btn = function(a, all, prop){
+						all = (all===false)?false:all||-1;if(a === false || a === true){all = a;a = {};}
+						prop = prop || 'enabled';
+						a.soft = ('soft' in a)?a.soft:all;a.firm = ('firm' in a)?a.firm:all;a.term = ('term' in a)?a.term:all;a.key = ('key' in a)?a.key:all;
+						if(a.soft!==-1) t.btn_soft[prop] = a.soft;if(a.firm!==-1) t.btn_firm[prop] = a.firm;
+						if(a.term!==-1) t.btn_term[prop] = a.term;if(a.key!==-1) t.btn_key[prop] = a.key;
+					}
+					t.hud_unpress = function(me){
+						if(t.btn_soft.down&& me != 'soft')t.btn_soft.down = false;if(t.btn_firm.down&& me != 'firm')t.btn_firm.down = false;if(t.btn_term.down&& me != 'term')t.btn_term.down = false;if(t.btn_key.down&& me != 'key')t.btn_key.down = false;
+					}
+					t.btn_soft.pressed = function(p){p = p.down;if(p){t.hud_unpress('soft');}t.hud_control(p?t.player.target.chip.modify.soft:false);t.codeView = p?'soft':'';t.codeArea.text = p?t.player.target.chip.software:(t.player.target?t.player.target.details:'');};
+					t.btn_firm.pressed = function(p){p = p.down;if(p){t.hud_unpress('firm');}t.hud_control(p?t.player.target.chip.modify.firm:false);t.codeView = p?'firm':'';t.codeArea.text = p?t.player.target.chip.firmware:(t.player.target?t.player.target.details:'');};
+					t.btn_term.pressed = function(p){p = p.down;if(p){t.hud_unpress('term');}t.hud_control(false);t.codeView = p?'term':'';t.codeArea.text = p?t.player.target.screen:(t.player.target?t.player.target.details:'');if(p) t.codeArea.pos = t.player.target.screenPos;t.commandLine.enabled = p?t.player.target.chip.modify.term:false;t.commandLine.unselected = p?function(){t.player.target.command = [t.commandLine.text,t.commandLine.pos];}:function(){};t.commandLine.text=p?t.player.target.command[0]:'';if(p)t.commandLine.pos = t.player.target.command[1];};
+					t.btn_key.pressed = function(p){p = p.down;if(p){t.hud_unpress('key');}t.hud_control(false);t.codeView = p?'key':'';t.codeArea.text = p?t.encryption:(t.player.target?t.player.target.details:'');};
+					
+					t.btn_soft.size = t.btn_firm.size = t.btn_term.size = 0.45;t.btn_key.size = 0.5;
+					t.btn_soft.switch = t.btn_firm.switch = t.btn_term.switch = t.btn_key.switch = true;
+					t.hud_btn({key:true}, false);
+					t.game_hud = true;
+					t.editor_hud = false;
+					
+					t.btn_key.image_alpha = 0;
+					t.btn_key.text.visible = false;
+				}
+				var create_hud_editor = function(){
+					t.transition = FadeTransition.instance_create(0,0,{from:0.5,onComplete:function(){
+						getE('editor').style.display = 'block';
+						t.transition = false;
+					}});
+					t.newProperties = function(obj){
+						if(!obj) return '';
+						var link = '';
+						for(var x in obj.chip.link){
+							link += (x!=0?', ':'')+obj.chip.link[x];
+						}
+						var r = 'Networks: '+link+
+						'\nPrivate Address: '+obj.chip.private+
+						'\nHas Software: '+(obj.chip.software?'true':'false')+
+						'\nHas Firmware: '+(obj.chip.firmware?'true':'false')+
+						'\nModify Software: '+(obj.chip.modify.soft?'true':'false')+
+						'\nModify Firmware: '+(obj.chip.modify.firm?'true':'false')+
+						'\nTerminal Access: '+(obj.chip.modify.term?'true':'false')
+						return r;
+					}
+					t.direction = 0;
+					t.opened = false;
+					t.private = false;
+					t.modify = {firm:false,soft:false};
+					t.use_terminal = false;
+					t.link = [];
+					t.ig_sel = 0;
+					t.hd_sel = 0;
+					t.ct_sel = '';
+					t.curitem = CurrentItem.instance_create(128, 128);
+					Label.instance_create(128, 64, 'Editor Mode');
+					
+					t.levelname = TextArea.instance_create(40, 24, '');
+					t.levelname.xscale = 0.5;t.levelname.yscale = 0.23;
+					t.levelname.allow_newline = false;
+					
+					t.properties = TextArea.instance_create(230, 170, '');
+					t.properties.enabled = false;
+					t.properties.xscale = 0.7;
+					
+					t.textfield = getE('code');
+					t.selpriv = createSwitch(64, 190, 'Private', 0.32, 'private');
+					t.selopen = createSwitch(24, 190, 'Open', 0.3, 'opened');
+					t.selmsoft = createSwitch(24, 230, '_Soft', 0.3, 'modify_soft');
+					t.selmfirm = createSwitch(64, 230, '_Firm', 0.3, 'modify_firm');
+					t.seluterm = createSwitch(104, 230, '_Term', 0.3, 'use_terminal');
+					
+					t.selupdate = createBtn(64, 300, 'Upload', 0.4, function(){var ii = t.ig_sel, sel = getE('codetype').value;if(!ii)return;ii.chip[sel] = getE('code').value;});
+					t.selfind = createBtn(200, 300, 'Find', 0.3, function(){var ii = t.ig_sel;if(!ii)return;g.view.x = ii.x-GameView.Room.w/2;g.view.y = ii.y-GameView.Room.h/2;});
+					t.seldel = createBtn(240, 300, 'Delete', 0.31, function(){var ind, ii = t.ig_sel, hw = t.hd_sel;if(!ii)return;t.editorSelectObject.time = 2;if(hw.object_index == Chipset) {ii.instance_destroy();getE('obj').remove(getE('obj').selectedIndex);} else {ii.hardware.splice((ind = getE('child').selectedIndex), 1);hw.instance_destroy();getE('child').remove(ind);}});
+					createBtn(256, 16, 'Test', 0.32, t.editorToGame);
+					
+					t.seldir = [Button.instance_create(64, 154, 'Right'),
+						Button.instance_create(24, 128, 'Up'),
+						Button.instance_create(64, 128, 'Left'),
+						Button.instance_create(24, 154, 'Down')];
+					for(let i in t.seldir){
+						t.seldir[i].switch = true;
+						t.seldir[i].size = 0.3;
+						let id = t.seldir[i].id;
+						t.seldir[i].pressed = function(p){
+							if(p.id === id){
+								t.direction = i;
+								p.enabled = false;
+								for(var z in t.seldir){if(t.seldir[z].down && t.seldir[z].id !== id){t.seldir[z].down = false;t.seldir[z].enabled = true;}}
+							}
+						}
+					}
+					t.seldir[t.direction].enabled = false;
+					t.seldir[t.direction].down = true;
+					t.game_hud = false;
+					t.editor_hud = true;
+				}
+				t.editorToGame = function(){
+					t.CurrentLevel = localStorage.backup_level = SaveLevel();
+					getE('editor').style.display = 'none';
+					FadeTransition.instance_create(0,0,{to:0.5,keep:20, onComplete:function(){
+						var ii = g.get_instance(SpawnPoint);
+						if(!ii)return;
+						t.player = Player.instance_create(ii.x, ii.y);
+						ii.instance_destroy();
+						g.With(HudPosition, function(tt){
+							tt.instance_destroy();
+						});
+						g.With(Chipset, function(tt){
+							tt.software = filterCode(tt.software);
+							tt.firmware = filterCode(tt.firmware);
+							tt.boot();
+						});
+						for(i = 0;i<VisibilityObjects.length; i++){
+							var tt = VisibilityObjects[i];
+							if(tt.destroyed) {VisibilityObjects.splice(i--, 1);continue;}
+							tt.vis = 0;
+						};
+						create_hud();
+						t.lookingTarget = CharacterName;
+					}})
+				}
+				t.restartLevel = function(){
+					t.transition = FadeTransition.instance_create(0,0,{to:0.5, keep:70, onComplete:function(){
+						if(t.death_transition){
+							t.death_transition.instance_destroy();
+							t.death_transition = false;
+						}
+						LoadLevel(t.CurrentLevel);
+					}})
+				}
+				t.startEditor = function(){
+					t.transition = FadeTransition.instance_create(0,0,{to:0.5,keep:20,onComplete:function(){
+						g.With(HudPosition, function(tt){
+							tt.instance_destroy();
+						});
+						if(t.death_transition) t.death_transition.instance_destroy();
+						if(t.player) t.player.instance_destroy();
+						t.player = null;
+						create_hud_editor();
+						RestoreBackup();
+					}});
+				}
+				t.lookingTarget = CharacterName;
+				t.last_target = null;
+				t.editor_hud = t.game_hud = false;
+				FadeTransition.instance_create(0,0,{from:0.5});
+				if(OnlineData.developer) t.startEditor(); else{
+					t.CurrentLevel = OnlineData.leveldata[0];
+					t.restartLevel();
+				}
+				t.graphics.depth = -7;
+			},
+			step:function(t){
+				for(var i = 0;i<t.amb.length;i++){
+					if(!!t.amb[i] && Math.abs(t.amb[i].volume-t.amb[i].vol)>0.002)
+						t.amb[i].volume += (t.amb[i].volume<t.amb[i].vol)?0.0001:-0.0001;
+				}
+				if(t.music){
+					t.music.volume += (t.music.volume<t.music.vol)?0.0001:-0.0001;
+					if(!t.music.vol && t.music.volume <= 0.002) {t.music.stop();t.music = false;}
+				} else {
+					if(!t.ambience_m.time) t.ambience_m.time = 5000 + Math.random(3000);
+				}
+				var c, vx=0, vy=0;
+				if(c = g.keyboard_char()){
+					KeyboardString += c;
+				}
+				if(t.player){
+					for(i = 0;i<VisibilityObjects.length; i++){
+						var tt = VisibilityObjects[i];
+						if(tt.destroyed) {VisibilityObjects.splice(i--, 1);continue;}
+					};
+					if(t.player.dead && !t.transition){
+						t.player.instance_destroy();
+						FadeTransition.instance_create(0,0,{from:0.5,speed:0.2,showHud:true,color:0xFF0000});
+						t.transition = t.death_transition = FadeTransition.instance_create(0,0,{to:0.5,keep:-1,showHud:true,color:0x000000});
+						t.lookingTarget = 'You Died';
+					}
+					var pTarget = t.player.target;
+					if(t.command){
+						if(pTarget && pTarget.chip.running){pTarget.cmd_list.push(t.command);pTarget.cmd_pos = pTarget.cmd_list.length-1;pTarget.chip.code.parse('term('+t.command.replace('\n', ' ')+')').run();}
+						t.command = '';
+					}
+					if(t.btn_term.down && pTarget && pTarget.refresh){
+						t.codeArea.text = pTarget.screen;
+						t.codeArea.view = pTarget.screenPos;
+					}
+					vx = t.player.x;
+					vy = t.player.y;
+					if(pTarget == t.last_target && pTarget){
+						t.lostTarget.time = 2;
+					} else {
+						t.gotTarget.time = 2;
+					}
+					t.last_target = pTarget;
+				} else if(!t.transition){
+					editor_step(t);
+					vx = g.view.x + GameView.Room.w/2 + (!TextSelected?(g.keyboard.D - g.keyboard.A)*8*!t.textfield.matches(':focus'):0);
+					vy = g.view.y + GameView.Room.h/2 + (!TextSelected?(g.keyboard.S - g.keyboard.W)*8*!t.textfield.matches(':focus'):0);
+				}
+				g.view.x = Math.max(0, Math.min(g.room.width - g.view.width + GameView.Hud.w, vx - (g.view.width - GameView.Hud.w)/2));
+				g.view.y = Math.max(0, Math.min(g.room.height - g.view.height, vy - g.view.height/2));
+				//g.view.x = vx - (g.view.width - GameView.Hud.w)/2;
+				//g.view.y = vy - g.view.height/2;
+				if(t.game_hud) t.looking.text.text = t.lookingTarget;
+				
+				if(!t.seenLoop.time) t.seenLoop.time = 20;
+				for(i = 0;i<VisibilityObjects.length; i++){
+					var tt = VisibilityObjects[i];
+					if(tt.destroyed) {VisibilityObjects.splice(i--, 1);continue;}
+					if(!t.player) {tt.vis = 1;continue;}
+					if(Math.abs(tt.vis-tt.seen)>0.01){
+						tt.vis += (tt.seen > tt.vis)?0.05:-0.0015;
+					}
+					tt.image_alpha = tt.vis;
+					if(tt.hardware)
+					for(var j = 0;j < tt.hardware.length;j++){
+						if(!VisibilityObjects.includes(tt.hardware[j])) tt.hardware[j].image_alpha = tt.vis;
+					}
+				};
+				if(t.player){
+					t.selected_regions = [];
+					for(var i = 0;i<9;i++){
+						var sx = (t.player.x - 120*!(i%3) + 120*(!((i+1)%3))),
+							sy = (t.player.y - 120*(i<3) + 120*(i>5));
+						var xx = Math.floor(sx/256),
+							yy = Math.floor(sy/256);
+						var ii = xx + yy*Math.floor(g.room.width/256);
+						//t.graphics.beginFill(0xAAAAAA,0.6);
+						//t.graphics.drawCircle(sx, sy, 40);
+						if(!t.selected_regions.includes(ii)) t.selected_regions.push(ii);
+					}
+					t.graphics.beginFill(0x000000,0.4);
+					t.graphics.drawRect(g.view.x,g.view.y,g.view.width-GameView.Hud.w,g.view.height);
+				}
+			},
+			alarms:[{name:'seenLoop', code:function(t){
+					if(t.player){
+						var vX = g.view.x, vY = g.view.y, vW = g.view.width-GameView.Hud.w, vH = g.view.height;
+						var inc = [], bnc = [], rays = [], seen = [], lx=t.player.x, ly=t.player.y-6,o,ii;
+						for(var i = 0;i<VisibilityObjects.length;i++){
+							var tt = VisibilityObjects[i];
+							if(tt.destroyed) {VisibilityObjects.splice(i--, 1);continue;}
+							tt.seen = 0;
+						}
+						for(var r = 0; r < t.selected_regions.length;r++){
+							var sr = t.selected_regions[r];
+							if(!Region[sr]) continue;
+							for(var i = 0;i<Region[sr].length; i++){
+								var tt = Region[sr][i];
+								if(tt.destroyed) {Region[sr].splice(i--, 1);continue;}
+								if(g.point_distance(tt.x, tt.y, lx, ly) > 300) continue;
+								inc.push(tt);
+								if(!GroundedObjects.includes(tt.object_index.name)) bnc.push(tt);
+							};
+						}
+						var xy = function(o){
+							var x, y,w,h,a=o.image_angle, c = Math.cos(a*dtr), s = Math.sin(a*dtr);
+							w = o.sprite.width/2;h = o.sprite.height/2;
+							for(var i = 0;i<4;i++){
+								x = (!(i%2)?w:-w);y = (i<2?h:-h);
+								dr(o.x + x*c + y*s, o.y - x*s + y*c, o);
+							}
+						}
+						var dr = function(x,y,co){
+							var o,vx,vy;
+							for(var ii = 0;ii < bnc.length;ii++){
+								o = bnc[ii];var d=(o.image_angle/90)%2;
+								var w = (d?o.sprite.height:o.sprite.width)/2,
+									h = (d?o.sprite.width:o.sprite.height)/2,
+									T=o.y-h, B=o.y+h, L=o.x-w, R=o.x+w, f, p,
+									vx = x - lx, vy = y - ly;
+								if((vy>0?B<ly:T>ly) || (vx>0?R<lx:L>lx)) continue;
+								if(vx>0){
+									//Left
+									f=(L-lx)/vx;
+									if(f>=0&&f<1){
+										p = f*vy + ly;
+										if(p>T&&p<=B) return;
+									}
+								} else if(vx){
+									//Right
+									f=(R-lx)/vx;
+									if(f>=0&&f<1){
+										p = f*vy + ly;
+										if(p>T&&p<=B) return;
+									}
+								}
+								if(vy){
+									//Top
+									f=(T-ly)/vy;
+									if(f>=0&&f<1){
+										p = f*vx + lx;
+										if(p>L&&p<=R) return;
+									}
+									if(vy<0){
+										//Bottom
+										f=(B-ly)/vy;
+										if(f>=0&&f<1){
+											p = f*vx + lx;
+											if(p>L&&p<=R) return;
+										}
+									}
+								}
+							}
+							//t.graphics.drawLine(x, y, lx, ly);
+							if(!seen.includes(co)) seen.push(co);
+							rays.push({x,y});
+						}
+						
+						for(var i = 0;i < inc.length;i++){
+							xy(inc[i]);
+						}
+						//t.graphics.beginFill(0xFFFFFF);
+						for(i = 0;i<seen.length;i++){
+							o = seen[i];
+							o.seen = Math.max(0, Math.min(1, (300 - g.point_distance(o.x, o.y, lx, ly))/200));
+							//t.graphics.drawCircle(o.x, o.y, 8*o.seen);
+						}
+					}
+				}},
+				{name:'lostTarget', code:function(t){
+				t.lookingTarget = CharacterName;
+				if(t.game_hud){
+					t.codeArea.text = '';
+					t.hud_unpress();t.hud_control();
+					t.hud_btn({key:true}, false);
+				}
+			}}, {name:'gotTarget', code:function(t){
+				if(!t.player || !t.player.target) return;
+				if(t.game_hud){
+					t.codeArea.text = t.player.target.details;
+					if(t.player.target.chip){
+						t.lookingTarget = t.player.target.chip.name;
+						var has_terminal = function(){for(var i in t.player.target.chip.hardware) { if(i>0 && t.player.target.chip.hardware[i].object_index.name == TerminalWindow.name) return true; }return false;}();
+						var en = {soft:(!!t.player.target.chip.software||!!t.player.target.chip.modify.soft), firm:(!!t.player.target.chip.firmware||!!t.player.target.chip.modify.firm), term:has_terminal};
+						t.hud_btn(en);
+						if(has_terminal){
+							t.btn_term.down = true;
+							t.btn_term.pressed(t.btn_term);
+						}
+						t.hud_control();
+					}
+				}
+			}}, {name:'messageClear', code:function(t){
+				t.message.text = '';
+			}},{name:'editorSelectObject',code:function(t){
+				var sel = t.ig_sel;
+				getE('child').innerHTML = '';
+				t.properties.text = '';
+				if(!sel) return;
+				t.editorSelectCode.time = 2;
+				if(('hardware' in sel)){
+					t.properties.text = t.newProperties(sel);
+					for(var x=0;x<sel.hardware.length;x++){
+						var e=sel.hardware[x];
+						getE('child').innerHTML += '<option value="'+e.id+'">HID('+x+') '+e.object_index.name+'('+e.sid+')</option>';
+					}
+				}
+			}},{name:'editorSelectCode', code:function(t){
+				var sel = t.ig_sel, code = getE('codetype').value;
+				getE('code').value = sel.chip[code];
+			}}, {name:'startGame', code:function(t){
+				t.editorToGame();
+			}},{name:'ambience', code:function(t){
+				if(t.music && t.music.vol) t.music.vol = 0;
+				for(var i = 0;i<Math.round(Math.random(t.amb.length));i++){
+					t.amb[Math.round(Math.random()*(t.amb.length-1))].vol = Math.random()*0.4;
+				}
+				t.ambience.time = 500 + Math.random(100);
+			}},{name:'ambience_m', code:function(t){
+				for(var i = 0;i<t.amb.length;i++){
+					t.amb[i].vol = Math.min(t.amb[i].vol, 0.05);
+				}
+				var song = t.songs[Math.round(Math.random()*(t.songs.length-1))];
+				t.music = g.sound_play('snd_ambience_music', {start:song[0], end:song[1], volume:0, complete:function(){t.music = false;}});
+				t.music.vol = 0.8*Math.max(Math.random(),0.25);
+				t.ambience.time = 6000 + Math.random(12000);
+			}}]
+		});
+		
+		var FadeTransition = new g.object({
+			creation:function(t, opt){
+				t.speed = opt.speed || 1;
+				t.progress = opt.from || 0;
+				t.fadeto = opt.to || 1;
+				t.color = opt.color || 0x000000;
+				t.keep = opt.keep || false;
+				t.onComplete = opt.onComplete || function(){};
+				t.graphics.depth = opt.showHud?-8:-35;
+				t.alpha = 0;
+				t.executed = false;
+			},
+			step:function(t){
+				if(t.progress < t.fadeto){
+					t.progress += t.speed/100;
+				} else {
+					if(!t.executed){t.progress = t.fadeto;t.onComplete(t);t.executed = true;}
+					if(!t.keep) t.instance_destroy();
+					if(t.keep > 0) t.keep = Math.max(t.keep-1, 0);
+				}
+				t.alpha = Math.sin(t.progress*(180)*dtr);
+				t.graphics.beginFill(t.color, t.alpha);
+				t.graphics.drawRect(g.view.x,g.view.y,g.view.width,g.view.height);
+			}
+		});
+		var PlayerShadow = new g.object({
+			image:'spr_shadow',
+			origin:{x:0, y:1},
+			creation:function(t){
+				t.depth = g.room.height + 1;
+				t.image_alpha = 0.4;
+				t.xscale = 0.6;
+			},
+			step:function(t){
+				t.x = t.player.x;
+				t.y = t.player.y;
+				t.image_single = t.player.image_single;
+				t.image_alpha = 0.4;
+			},
+			collision:[{object:CollisionWalls, code:function(t, other){}}]
+		});
+		var PlayerAlpha = new g.object({
+			parent:EditorObject,
+			depth:-1000,
+			image:'spr_alpha_lamp',
+			creation:function(t){
+				t.image_alpha = 0.1;
+				t.sprite.blendMode = 6;
+			}
+		});
+		var Player = new g.object({
+			image:'spr_character',
+			origin:{x:0.5, y:1},
+			mask:{x:0, y:-10, radius:10},
+			creation:function(t){
+				t.shadow = PlayerShadow.instance_create(t.x, t.y);
+				//t.player_alpha = PlayerAlpha.instance_create();
+				t.shadow.player = t;
+				t.target = null;
+				t.death = null;
+				t.dead = false;
+				t.image_single = 0;
+				t.spd = 2;
+				t.dir = -1;
+				t.last_dir = 0;
+				t.ang = 270;
+				t.walking = false;
+				t.choose_transmitter = 0;
+				t.transmitters = 3;
+				t.update_target = function(){
+					t.target = null;
+					var v = g.vector_direction(t.ang), ii;
+					if(!t.choose_transmitter){
+						t.target = g.collision_point(t.x + v[0]*20, t.y + v[1]*20 - 16, WallObjects)[0];
+						//t.target.
+					} else if((ii = g.get_instance(Wireless, t.choose_transmitter - 1)) && ii.owner){
+						t.target = ii.owner;
+					}
+				}
+			},
+			destroyed:function(t){
+				t.shadow.instance_destroy();
+			},
+			step:function(t){
+				var ii;
+				if(t.dead) return;
+				t.depth = g.room.height - t.y;
+				t.last_dir = (t.dir==-1)?t.last_dir:t.dir;
+				t.dir = TextSelected?-1:(g.keyboard.down?0:(g.keyboard.left?1:(g.keyboard.right?2:(g.keyboard.up?3:-1))));
+				if(t.dir != -1){
+					t.walking = true;
+					t.stop_walking.time = 5;
+					switch(t.dir){
+						case 0:t.y += t.spd;t.ang = 270;break;
+						case 1:t.x -= t.spd;t.ang = 180;break;
+						case 2:t.x += t.spd;t.ang = 0;break;
+						case 3:t.y -= t.spd;t.ang = 90;break;
+					}
+				}
+				if(t.walking && !t.choose_transmitter){
+					t.update_target();
+				}
+				
+				if(t.target){
+					if(!t.choose_transmitter && g.keyboard_check_pressed('control')){
+						if(t.target.hacked){
+							t.transmitters++;
+							ii = t.target.hardware.splice(t.target.hacked, 1)[0];
+							ii.owner.chip.hardware.splice(t.target.hacked, 1);
+							ii.instance_destroy();
+							t.target.hacked = null;
+						} else if(t.transmitters){
+							ii = Wireless.instance_create(t.target.x, t.target.y, {owner:t.target});
+							ii.depth = t.target.depth - 3;
+							t.target.hacked = t.target.hardware.length;
+							t.target.hardware.push(ii);
+							t.transmitters--;
+						}
+					}
+				}
+			},
+			end_step:function(t){
+				if(t.dead) return;
+				t.image_single = (!t.walking)?t.last_dir*4:((t.image_single + 0.2) % 4)+4*t.last_dir;
+				if(t.target){
+					var xx = t.target.x, yy = t.target.y;
+					t.graphics.depth = 0;
+					t.graphics.beginFill(0x0000AA, 0.2);
+					t.graphics.drawRect(xx - 16, yy - 16, 32, 32);
+				}
+				if(g.keyboard_check_pressed('pageup') || g.keyboard_check_pressed('pagedown')){
+					t.choose_transmitter = Math.max(Math.min(t.choose_transmitter + g.keyboard.pageup - g.keyboard.pagedown, Wireless.instance_number()), 0);
+					g.With(ViewingItem, function(tt){
+						var c = t.choose_transmitter;
+						tt.image_single = !!c;
+						tt.text.text = c?c-1:'';
+					});
+					t.update_target();
+				}
+			},
+			alarms:[{name:'stop_walking', code:function(t){
+					t.walking = false;
+				}}
+			],
+			collision:[{object:CollisionWalls, code:function(t, other){
+				g.collision_bounce(t, other);
+				if(other.object_index == DoorPanel){
+					g.collision_bounce(t, other);
+					if(other.motion && g.collision_point(t.x, t.y, Wall)) {t.death = other;t.dead = true;}
+				}
+			}}]
+		});
+		var Wall = new g.object({
+			image:'spr_wall',
+			name:'Wall',
+			parent:WallObjects
+		});
+/*
+		var Door = new g.object({
+			image:'spr_wall',
+			parent:WallObjects,
+			creation:function(t, opt){
+				t.inherited();
+				//Door Options
+				opt = opt || {};
+				if(!('dir' in opt)) opt.dir = 0;
+				if(!('open' in opt)) opt.open = true;
+				t.details = (!('details') in opt)?opt.details:'Door Controller';
+				opt.owner = t;
+				t.door = DoorPanel.instance_create(t.x, t.y, opt);
+				t.door.depth = t.depth+1;
+				t.door.owner = t;
+				t.chip.name = 'Door Chipset: '+t.chip.sn;
+				t.chip.firmware = 'init(\n return(\n  set(_counter add(get(_counter) 1))\n )\n password(if($0 shadownet 1 0)) error(set(_lastError $0))\n set(_counter 0)\n publish(opendoor)\n opendoor (if(error(if(password($0) 1 hardware null)(1 reverse)) 1\n  return\n  get\n  )(_lastError)\n )\n)';
+				//t.chip.software = 'set(hs hardware(1 state 0))\n if(get(hs) 1 hardware(1 close 0) get(hs))';
+				t.chip.boot();
+			}
+		});
+*/
+		var DoorPanel = new g.object({
+			image:'spr_door',
+			name:'Door',
+			parent:CollisionWalls,
+			mask:{x:0,y:0,w:32,h:32},
+			creation:function(t, opt){
+				t.inherited();
+				AddToRegion(t);
+				opt = opt || {};
+				if(!('dir' in opt)) opt.dir = 0;
+				if(!('open' in opt)) opt.open = true;
+				if(!('owner' in opt)) opt.owner = null;
+				t.direction = opt.dir;//ruld
+				t.openD = opt.open;
+				t.owner = opt.owner;
+				t.motion = false;
+				var dtp = function(){
+					var p = g.get_instance(Player);
+					if(!p) return 0;
+					return Math.max(0, Math.min(1, (140-g.point_distance(t.x, t.y, p.x, p.y))/200));
+				}
+				//-- Hardware Features
+				t.features = ['open', 'close', 'reverse', 'state'];
+				t.reverse = function(){t.openD = !t.openD;g.sound_play('snd_door',t.openD?{end:0.5,speed:1,volume:dtp()}:{start:0.5,speed:1.2,volume:dtp()});return 1;}
+				t.open = function(){if(!t.openD) g.sound_play('snd_door',{end:0.5,speed:1,volume:dtp()});t.openD = true;return 1;}
+				t.close = function(){if(t.openD) g.sound_play('snd_door',{start:0.5,speed:1.2,volume:dtp()});t.openD = false;return 1;}
+				t.state = function(){return +t.openD;}
+				//--
+				t.owner.chip.hardware.push(t);
+				var vert = (t.direction == 1 || t.direction == 3);
+				t.opened = [t.x, t.y];
+				t.closed = [t.x + ((t.direction == 2)?-32:(t.direction == 0)?32:0), t.y + ((t.direction == 1)?-32:(t.direction == 3)?32:0)];
+				if(!t.openD){
+					t.x = t.closed[0];
+					t.y = t.closed[1];
+				}
+				t.image_angle = t.direction*-90 + 90;
+				t.mask.width = 16 + 16*(!vert);
+				t.mask.height = 16 + 16*(vert);
+				t.xscale = 12/t.sprite.width;
+				t.yscale = 32/t.sprite.height;
+				t.set_depth.time = 3;
+			},
+			step:function(t){
+				var d = t.openD?t.opened:t.closed, xx = d[0], yy = d[1];
+				t.x += ((t.x < xx) - (t.x > xx))*2;
+				t.y += ((t.y < yy) - (t.y > yy))*2;
+				t.motion = (t.x != t.xprevious || t.y != t.yprevious);
+			},
+			alarms:[{name:'set_depth', code:function(t){
+				t.depth = t.owner.depth+2;
+			}}]
+		});
+/*
+		var Link = new g.object({
+			image:'spr_wall',
+			parent:WallObjects,
+			creation:function(t, opt){
+				t.inherited();
+				opt = opt || {};
+				if(!('link' in opt) || !(opt.link instanceof Array)) opt.link = [];
+				opt.link.push(t.chip.network);
+				for(var l in opt.link) t.chip.address[opt.link[l]] = GetAddress(opt.link[l]);
+				t.details = 'Network Link\nConnected: '+opt.link.join(',');
+				t.chip.name = 'Network Link: '+t.chip.sn;
+				t.link = LinkChip.instance_create(t.x,t.y,{owner:t});
+				t.link.depth = t.depth - 1.5;
+			}
+		});
+*/
+		var LinkChip = new g.object({
+				image:'spr_link',
+				name:'Link',
+				parent:HardwareObject,
+				creation:function(t, opt){
+					t.inherited();
+					t.xscale = t.yscale = 0.3;
+					t.features = [];
+					t.image_angle = 90*Math.round(Math.random()*3);
+					if(!opt || !opt.owner) return;
+					if(!('link' in opt) || !(opt.link instanceof Array)) opt.link = [];
+					t.owner = opt.owner;
+					t.link = opt.link;
+					[].push.apply(t.owner.chip.link, opt.link);
+				}
+			});	
+		var Wireless = new g.object({
+			image:'spr_wireless',
+			name:'Wireless',
+			parent:HardwareObject,
+			creation:function(t, opt){
+				t.inherited();
+				t.xscale = t.yscale = 0.8;
+				t.features = [];
+				if(!opt) return;
+				t.owner = opt.owner || null;
+				if(!t.owner) return;
+				t.owner.chip.hardware.push(t);
+			}
+		});
+/*
+		var Terminal = new g.object({
+			image:'spr_wall',
+			parent:WallObjects,
+			creation:function(t, opt){
+				t.inherited();
+				opt = opt || {};
+				t.chip.name = 'Terminal: '+t.chip.sn;
+				t.details = (!('details') in opt)?opt.details:'Terminal';
+				t.chip.firmware = 'init(\n	set(echo 1) set(ready 0)\n	hardware(1 print concat(Loading Glui Terminal nl()))\n	push(hardware(1 print concat($0 nl()))\n	hardware(1 scroll 1 0) if(get(echo) 1 <- concat()))\n\n	_loading_a(push(concat(Version 0.10)))\n	_loading_b(push(concat(Loading Successful!))\n	set(ready 1)) hardware(0 async _loading_a null 50)\n	hardware(0 async _loading_b null 50)\n	execute( push($0(get(_a) get(_b) get(_c)\n		get(_d) get(_e) get(_f)))\n	)\n	error(push(concat(Unknown Command: $0)))\n	exec(if(get(echo) 1 push null)(concat($0 -> get(_a) get(_b) get(_c)\n		get(_d) get(_e) get(_f)))\n		if(isdef($0) 1 execute error)($0)\n	)\n	term (set(_a $1) set(_b $2) set(_c $3)\n		set(_d $4) set(_e $5) set(_f $6)\n		if(get(ready) 1 exec null)($0)\n	)\n	publish(term)\n)';
+				t.window = TerminalWindow.instance_create(t.x, t.y, {owner:t});
+				t.window.depth = t.depth - 1.5;
+				t.chip.boot();
+			}
+		});
+*/	
+		var TerminalWindow = new g.object({
+			image:'spr_terminal',
+			name:'Terminal',
+			parent:HardwareObject,
+			creation:function(t, opt){
+				t.inherited();
+				t.xscale = 0.4;t.yscale = 0.6;
+				if(!opt) return;
+				t.owner = opt.owner;
+				if('terminal' in opt) t.owner.chip.modify.term = opt.terminal;
+				//-- Hardware Features
+				t.features = ['print', 'clear', 'scroll'];
+				t.print = function(str){t.owner.screen += str[0];}
+				t.clear = function(str){t.owner.screen = '';return '';}
+				t.scroll = function(dir){t.owner.screenPos+=dir[0]*(!!dir[1]?-1:1);t.owner.refresh = true;}
+				//--
+				t.owner.chip.hardware.push(t);
+			},
+			destroyed:function(t){
+				t.owner.chip.modify.term = false;
+			}
+		});
+		
+		var FloorPanel = new g.object({
+			image:'spr_panel',
+			name:'Panel',
+			parent:HardwareObject,
+			creation:function(t, opt){
+				t.inherited();
+				AddToRegion(t);
+				t.xscale = 0.5;t.yscale = 0.5;
+				if(!opt) return;
+				t.direction = opt.dir || 0;
+				t.x += ((t.direction == 2)?-32:(t.direction == 0)?32:0);
+				t.y += ((t.direction == 1)?-32:(t.direction == 3)?32:0);
+				t.owner = opt.owner;
+				t.collide = false;
+				t.p_call = [];
+				t.r_call = [];
+				//-- Hardware Features
+				t.features = ['state', 'onpress', 'onrelease'];
+				t.state = function(){return +t.collide;}
+				t.onpress = function(a){var l='';for(var i=0;i<a.length-1;i++){l+=' $'+i;};t.p_call = [a.splice(0,1)[0], l, a];}
+				t.onrelease = function(a){var l='';for(var i=0;i<a.length-1;i++){l+=' $'+i;};t.r_call = [a.splice(0,1)[0], l, a];}
+				
+				t.pressed = function(){if(t.p_call.length) t.owner.chip.code.parse(t.p_call[0]+'('+t.p_call[1]+')').run(t.p_call[2]);}
+				t.released = function(){if(t.r_call.length) t.owner.chip.code.parse(t.r_call[0]+'('+t.r_call[1]+')').run(t.r_call[2]);}
+				//--
+				t.owner.chip.hardware.push(t);
+				t.set_depth.time=3;
+			},
+			alarms:[{name:'set_depth', code:function(t){
+				t.depth = g.room.height + 10;
+			}}, {name:'reset_state', code:function(t){
+				t.collide = false;
+				t.released();
+			}}],
+			collision:[{object:Player,code:function(t, other){
+				if(!t.collide) t.pressed();
+				t.collide = true;
+				t.reset_state.time = 3;
+			}}]
+		});
+		var Chipset = new g.object({
+			image:'spr_chip',
+			name:'Chipset',
+			parent:NetworkObject,
+			creation:function(t, net){
+				t.inherited();
+				t.running = false;
+				t.name = 'Chipset '+t.sn;
+				t.owner = null;
+				t.xscale = t.yscale = 0.06;
+				t.image_single = 0;
+				t.image_angle = Math.random()*360;
+				t.image_alpha = 0.6 + 0.4*Math.random();
+				
+				t.network = net || 0; // Network Layer
+				t.link = [t.network];
+				t.address = {};
+				t.getNetworkAddress.time = 2;
+				t.private = false;
+				t.modify = {soft:false, firm:false, term:false};
+				t.hardware = [(new (function(){
+					var tt = this;
+					tt.features = ['overclock', 'reboot', 'async'];
+					tt.overclock = function(x){return t.overclock = x[0] || t.overclock;}
+					tt.reboot = function(mode){t.rebootmode = mode || '';t.reboot.time = 100;t.clock.time = 0;t.owner.screen = '';t.running = false;return 'Rebooting...';}
+					tt.async = function(cmd){if(!cmd[0]) return 'Async Failed'; if(!cmd[2] || +cmd[2] !== cmd[2]) return 'Async Timer Failed'; t.queue.push(cmd);t.async.time = +cmd[2];return 1;}
+				})())];
+				
+				t.code = new CodeBlock(t); // Machine Code Object
+				t.boot = function(mode){
+					mode = mode || ''; //Allows for custom boot properties
+					t.code.parse(t.firmware, true).run();//load firmware into memory cache
+					var s = t.code.parse('if(isdef(mbr()) 0 NOBOOT mbr()($0))mbr()').run([mode]);//boot operating method
+					if(s == 'NOBOOT') return false; 
+					t.clock.time = Math.max(80 - t.overclock, 15);
+					return t.running = true;
+				}
+				t.queue = [];
+				t.firmware = '';
+				t.overclock = 0;
+				t.code.parse('mbr($0)').run(['init']); // Force the master boot record to default at "init" script
+				var soft = '';
+				Object.defineProperty(t, 'software', {get:function(){return soft;}, set:function(x){soft = x;t.compiled_software = t.code.parse(x);}})
+				t.software = '';
+			},
+			alarms:[{name:'clock', code:function(t){
+				t.clock.time = Math.max(80 - t.overclock, 15);if(t.software) t.compiled_software.run();
+			}},{name:'reboot', code:function(t){
+				t.owner.screen = '';
+				t.code.parse('', true);//Clear Cache
+				t.boot(t.rebootmode);
+			}},{name:'async', code:function(t){
+				var call = t.queue.shift();
+				t.code.parse(call[0]+'($0)').run([call[1]]); //Call to parse
+				if(t.queue.length) t.async.time = t.queue[0][2];
+			}},{name:'getNetworkAddress', code:function(t){
+				if(t.link.length) t.network = t.link[0];
+				for(var i in t.link){t.address[t.link[i]] = GetAddress(t.link[i]);} // Network Address
+			}}]
+		});
+		
+		//Create Instances
+		Hud.instance_create(0,0);
+		Cont.instance_create(0,0);
+	}
+};
+	</script>
+	<div id="editor" style="position:absolute;top:335px;left:536px;resize:none;display:none;">
+		<select id="obj"></select>
+		<select id="child"></select>
+		<input id="network" type="textbox" value="0" style="width:32px;"></input>
+		<br><select id="codetype"><option value="firmware">Firmware</option><option value="software">Software</option></select>
+		<br>
+		<textarea id="code" style="height:128px;width:316px;resize:none;"></textarea>
+	</div>
+	</body>
+</html>
+
