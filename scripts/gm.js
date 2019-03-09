@@ -1,6 +1,6 @@
 /* ------------------------------------------ //
 					GM-JS
-			Version: 0.6.0
+			Version: 0.6.1
 			Author: jmscreator
 			License: Free to use (See GPL License)
 			
@@ -62,7 +62,8 @@ var GMJS = new (function(){'use strict';
 		BeginStep = Params['beginStep'] || function(){},
 		EndStep = Params['endStep'] || function(){},
 		PreventDefault = Params['preventDefault'] || false,
-		PreventDefaultExpression = Params['preventDefaultExp'] || function(){return true;};
+		PreventDefaultExpression = Params['preventDefaultExp'] || function(){return true;},
+		CanvasDiv = Params['canvas'] || document.body;
 		
 		Params['room'] = Params['room'] || {},
 		Params['view'] = Params['view'] || {}
@@ -70,7 +71,8 @@ var GMJS = new (function(){'use strict';
 
 		//Start Loading Screen
 		var loadingScreen = new Application(LoadingRoom);
-		document.body.appendChild(loadingScreen.view);
+		appendChild(
+		CanvasDiv.appendChild(loadingScreen.view);
 		
 		var View = {},
 		Screen = {};
@@ -836,10 +838,10 @@ var GMJS = new (function(){'use strict';
 		function setup() {
 			loadTextures(TexList);
 			setTimeout(function(){
-				document.body.removeChild(loadingScreen.view);
+				CanvasDiv.removeChild(loadingScreen.view);
 				loadingScreen.destroy();
 				//Create game on screen
-				document.body.appendChild(app.view);
+				CanvasDiv.appendChild(app.view);
 				GameStart();
 				app.ticker.add(mainLoop);
 				}, AfterLoadTimeout);
