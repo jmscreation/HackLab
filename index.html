@@ -194,7 +194,7 @@ window.onload = function(){'use strict';
 		}
 		FindChipset = function(network, address){
 			var ret = null;
-			address = address || '';
+			address = typeof(address) == 'string' ? address : '';
 			g.With(NetworkObject, function(ii){
 				if(ii.link.includes(network) && ii.address[network] == address.toUpperCase()){
 					ret = ii;
