@@ -14,7 +14,7 @@
 		<script type="text/javascript">
 
 /*
-		HACKLAB Version 0.3.6
+		HACKLAB Version 0.3.7
 		-- jmscreation --
 */
 		
@@ -165,7 +165,7 @@ window.onload = function(){'use strict';
 				room:{width:2400, height:2400},
 				files:Files,
 				view:{width:GameView.Room.w + GameView.Hud.w, height:GameView.Room.h},
-				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return((t.keyboard.control && (!g.get_instance(Cont).textfield.matches(':focus') || e.key == 'S')) || t.keyboard.tab);},
+				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return((t.keyboard.control && ((!!g.get_instance(Cont).textfield && !g.get_instance(Cont).textfield.matches(':focus')) || e.key == 'S')) || t.keyboard.tab);},
 				preventDefault:true
 			});
 		} else return console.error('GMJS not found');
