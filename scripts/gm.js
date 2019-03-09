@@ -71,7 +71,6 @@ var GMJS = new (function(){'use strict';
 
 		//Start Loading Screen
 		var loadingScreen = new Application(LoadingRoom);
-		appendChild(
 		CanvasDiv.appendChild(loadingScreen.view);
 		
 		var View = {},
