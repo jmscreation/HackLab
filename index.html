@@ -166,7 +166,8 @@ window.onload = function(){'use strict';
 				files:Files,
 				view:{width:GameView.Room.w + GameView.Hud.w, height:GameView.Room.h},
 				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return((t.keyboard.control && ((!!g.get_instance(Cont).textfield && !g.get_instance(Cont).textfield.matches(':focus')) || e.key == 'S')) || t.keyboard.tab);},
-				preventDefault:true
+				preventDefault:true,
+				canvas:document.getElementById('ctx')
 			});
 		} else return console.error('GMJS not found');
 	}
@@ -1876,6 +1877,7 @@ window.onload = function(){'use strict';
 	}
 };
 	</script>
+	<div id="ctx" style=style="display: flex;position: fixed;justify-content: center;align-items:center;width: 100vw;height:100vh;">
 	<div id="editor" style="position:absolute;top:335px;left:536px;resize:none;display:none;">
 		<select id="obj"></select>
 		<select id="child"></select>
@@ -1883,6 +1885,7 @@ window.onload = function(){'use strict';
 		<br><select id="codetype"><option value="firmware">Firmware</option><option value="software">Software</option></select>
 		<br>
 		<textarea id="code" style="height:128px;width:316px;resize:none;"></textarea>
+	</div>
 	</div>
 	</body>
 </html>
