@@ -8,7 +8,7 @@
 		<script src="scripts/nimble.js" type="text/javascript"></script>
 		<script src="scripts/pixi.js" type="text/javascript"></script>
 		<script src="scripts/pixi-sound.js" type="text/javascript"></script>
-		<script src="../GMJS/gm.js" type="text/javascript"></script>
+		<script src="scripts/gm.js" type="text/javascript"></script>
 	</head>
 	<body>
 		<script type="text/javascript">
@@ -165,7 +165,7 @@ window.onload = function(){'use strict';
 				room:{width:2400, height:2400},
 				files:Files,
 				view:{width:GameView.Room.w + GameView.Hud.w, height:GameView.Room.h},
-				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return(t.keyboard.control && (!g.get_instance(Cont).textfield.matches(':focus') || e.key == 'S'));},
+				preventDefaultExp:function(t, e){if(!t.keyboard) return true;return((t.keyboard.control && (!g.get_instance(Cont).textfield.matches(':focus') || e.key == 'S')) || t.keyboard.tab);},
 				preventDefault:true
 			});
 		} else return console.error('GMJS not found');
@@ -604,8 +604,8 @@ window.onload = function(){'use strict';
 			end_step:function(t){
 				t.x = (g.view.x + g.view.width - GameView.Hud.w + t.xx);
 				t.y = (g.view.y + t.yy);
-				if(g.mouse_check_pressed()){TextSelected = t.selected = false;KeyboardString = '';}
-				if(g.mouse_click(t, g.mouse_check_pressed)) t.onclick();
+				if((g.mouse_check_pressed() || g.keyboard.escape || g.keyboard_check_pressed('tab')) && t.selected){TextSelected = t.selected = false;KeyboardString = '';return;}
+				if(g.mouse_click(t, g.mouse_check_pressed) || (g.keyboard_check_pressed('tab') && !t.selected)) t.onclick();
 			}
 		});
 		var Hud = new g.object({
